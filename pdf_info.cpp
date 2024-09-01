@@ -213,24 +213,45 @@ void print_pdfobject(std::vector<ObjectIDType> &indirects, PDFParser& parser, PD
     case PDFDictionary::ePDFObjectStream: {
       PDFObjectCastPtr<PDFStreamInput> _value = value;
       if(!dry_run) {
+        Byte c;
         IByteReader* stream = parser.StartReadingFromStream(_value.GetPtr());
         std::string prefix = string_format("%%-%lus", (depth + 1) * 2);
+        bool is_hex = false;
+        while(stream->NotEnded()) {
+          IOBasicTypes::LongBufferSizeType read;
+          if((read = stream->Read(&c, 1)) != 1) {
+            break;
+          }
+          if(!isascii(c)) {
+            is_hex = true;
+            break;
+          }
+        }
 
-        UnicodeString u;
-        Byte c;
         int pos = 0;
         printf("\n");
         printf(prefix.c_str(), "");
+        stream = parser.StartReadingFromStream(_value.GetPtr());
+
+        //is_hex = true; //force hex style
         while(stream->NotEnded()) {
-          IOBasicTypes::LongBufferSizeType read = stream->Read(&c, 1);
-          printf("%02X", c & 0x0FF);
-          if(((pos + 1) % 16) == 0) {
-            printf("\n");
-            printf(prefix.c_str(), "");
-            pos = 0;
+          IOBasicTypes::LongBufferSizeType read;
+          if(read = stream->Read(&c, 1) != 1) {
+            break;
+          }
+          if(is_hex) {
+            printf("%02X", c & 0x0FF);
+
+            if(((pos + 1) % 16) == 0) {
+              printf("\n");
+              printf(prefix.c_str(), "");
+              pos = 0;
+            } else {
+              printf(" ");
+              pos++;
+            }
           } else {
-            printf(" ");
-            pos++;
+            printf("%c", c & 0x0FF);
           }
         }
         printf("\n");
@@ -252,15 +273,13 @@ void print_pdfobject(std::vector<ObjectIDType> &indirects, PDFParser& parser, PD
 
     case PDFDictionary::ePDFObjectHexString: {
       PDFObjectCastPtr<PDFHexString> _value = value;
+      std::string v = _value->GetValue();
       if(!dry_run) {
-        if(_value->GetValue().size() > 2) {
-          UnicodeString u;
-          u.FromUTF16(_value->GetValue());
-          EStatusCodeAndString result = u.ToUTF8();
-          printf("value = %s\n", result.second.c_str());
-        } else {
-          printf("value =\n");
+        printf("value = ");
+        for(size_t i = 2; i < v.size(); i += 2) {
+          printf("%c", v.at(i + 1));
         }
+        printf("\n");
       }
       break;
     }
